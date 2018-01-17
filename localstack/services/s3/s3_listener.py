@@ -508,23 +508,6 @@ class ProxyListenerS3(ProxyListener):
         if response:
             append_cors_headers(bucket_name, request_method=method, request_headers=headers, response=response)
 
-            response_content_str = None
-            try:
-                response_content_str = to_str(response._content)
-            except Exception:
-                pass
-
-            # we need to un-pretty-print the XML, otherwise we run into this issue with Spark:
-            # https://github.com/jserver/mock-s3/pull/9/files
-            # https://github.com/localstack/localstack/issues/183
-            # Note: yet, we need to make sure we have a newline after the first line: <?xml ...>\n
-            if response_content_str and response_content_str.startswith('<'):
-                is_bytes = isinstance(response._content, six.binary_type)
-                response._content = re.sub(r'([^\?])>\n\s*<', r'\1><', response_content_str, flags=re.MULTILINE)
-                if is_bytes:
-                    response._content = to_bytes(response._content)
-                response.headers['content-length'] = len(response._content)
-
 
 # instantiate listener
 UPDATE_S3 = ProxyListenerS3()
