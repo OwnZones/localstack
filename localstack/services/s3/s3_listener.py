@@ -121,10 +121,10 @@ def queue_url_for_arn(queue_arn):
 def send_notifications(method, bucket_name, object_path):
     for bucket, config in iteritems(S3_NOTIFICATIONS):
         if bucket == bucket_name:
-            action = {'PUT': 'ObjectCreated', 'DELETE': 'ObjectRemoved'}[method]
+            action = {'PUT': 'ObjectCreated', 'POST': 'ObjectCreated', 'DELETE': 'ObjectRemoved'}[method]
             # TODO: support more detailed methods, e.g., DeleteMarkerCreated
             # http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html
-            api_method = {'PUT': 'Put', 'DELETE': 'Delete'}[method]
+            api_method = {'PUT': 'Put', 'POST': 'Post', 'DELETE': 'Delete'}[method]
             event_name = '%s:%s' % (action, api_method)
             if (event_type_matches(config['Event'], action, api_method) and
                     filter_rules_match(config.get('Filter'), object_path)):
@@ -471,6 +471,7 @@ class ProxyListenerS3(ProxyListener):
         parsed = urlparse.urlparse(path)
         # TODO: consider the case of hostname-based (as opposed to path-based) bucket addressing
         bucket_name = parsed.path.split('/')[1]
+        query_keys = [q.split('=')[0] for q in parsed.query.split('&')]
 
         # POST requests to S3 may include a success_action_redirect field,
         # which should be used to redirect a client to a new location.
@@ -482,7 +483,9 @@ class ProxyListenerS3(ProxyListener):
                 LOGGER.debug('S3 POST {} to {}'.format(response.status_code, response.headers['Location']))
 
         # get subscribers and send bucket notifications
-        if method in ('PUT', 'DELETE') and '/' in path[1:]:
+        if (method == 'DELETE' or
+            (method == 'PUT' and 'partNumber' not in query_keys) or
+            (method == 'POST' and 'uploadId' in query_keys)) and '/' in path[1:]:
             # check if this is an actual put object request, because it could also be
             # a put bucket request with a path like this: /bucket_name/
             if len(path[1:].split('/')[1]) > 0:
